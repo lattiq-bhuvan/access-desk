@@ -7,17 +7,22 @@ import (
 	"time"
 
 	govalidator "github.com/go-playground/validator/v10"
-	"github.com/lattiq/foundry/config"
-	"github.com/lattiq/foundry/o11y/logging"
-	"github.com/lattiq/foundry/service"
 	_http "github.com/lattiq/foundry/service/http"
 	_gin "github.com/lattiq/foundry/service/http/gin"
+	"github.com/lattiq/foundry/config"
+	"github.com/lattiq/foundry/database/sql"
+	"github.com/lattiq/foundry/o11y/logging"
+	"github.com/lattiq/foundry/service"
 	"github.com/lattiq/foundry/validator"
+
+	"github.com/lattiq-bhuvan/access-desk/internal/handler"
+	"github.com/lattiq-bhuvan/access-desk/internal/store"
 )
 
 type Config struct {
 	Logging logging.Config `json:"logging"`
 	Server  _http.Config   `json:"server"`
+	Database sql.Config `json:"database"`
 }
 
 func main() {
@@ -42,7 +47,18 @@ func main() {
 	serverName := "access-desk"
 	svc := service.New(serverName).WithShutdownTimeout(5 * time.Second)
 
+	st, err := store.New(context.Background(), &cfg.Database)
+	if err != nil {
+		slog.Error("failed to init store", "error", err)
+		os.Exit(1)
+	}
+	
+	dh := handler.NewDatasetHandler(st)
+	
 	router := _gin.Router(&cfg.Server)
+	v1 := router.Group("/v1")
+	v1.GET("/datasets", dh.List)
+	
 	httpServer := _http.NewServer(&cfg.Server, router)
 	svc.AddServer("http", httpServer, cfg.Server.Address())
 
