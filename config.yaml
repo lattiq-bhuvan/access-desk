@@ -1,0 +1,16 @@
+logging:
+  level: debug
+  format: text
+
+server:
+  name: access-desk
+  mode: debug
+  host: ""
+  port: 8080
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  cors:
+    allowed_origins: ["*"]
+    allowed_methods: ["GET", "POST", "OPTIONS"]
+    allowed_headers: ["*"]

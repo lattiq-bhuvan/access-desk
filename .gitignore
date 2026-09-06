@@ -1,0 +1,133 @@
+# Go build artifacts and modules
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+vendor/
+
+# Go test coverage
+*.cover
+coverage.html
+coverage.out
+coverage.txt
+c.out
+
+# Debug and profiling
+debug
+*.debug
+__debug_bin*
+*.pprof
+*.trace
+*.prof
+
+# Build directories
+build/
+dist/
+bin/
+target/
+out/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+*.bak
+*.sw?
+
+# Logs
+logs/
+*.log
+debug.log
+debug.txt
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+*~
+.fuse_hidden*
+.Trash-*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs and editors
+.idea/
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Environment and configuration
+.env
+.env.*
+!.env.example
+.envrc
+*.local
+config.local.*
+local_config.*
+
+# Database files
+*.sqlite
+*.sqlite3
+*.sql
+!db/*.sql
+!db/migrations/*.sql
+*.dump
+*.backup
+*.db
+dump/
+backups/
+
+# Infrastructure and deployment
+docker-compose.override.yml
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+
+# Development and experimentation
+playground/
+sandbox/
+experiments/
+scratch/
+
+# Security and credentials
+secrets/
+*.secret
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account.json
+*-credentials.json
+
+# Postman
+*.postman_collection.json
+
+# AI and LLM tools
+.claude/
+.cursor/
+.aider*
+.codeium/
+.copilot/
+.bolt/
+*.anthropic
+*.openai
+.ai-cache/
+llm-cache/
