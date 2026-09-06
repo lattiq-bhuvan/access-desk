@@ -2,6 +2,30 @@ logging:
   level: debug
   format: text
 
+
+tracing:
+  otlp_endpoint: "localhost:4317"   # the collector, NOT OpenObserve
+  otlp_protocol: grpc
+  stdout_exporter: true             # keep on until traces show up in OpenObserve
+
+
+database:
+  driver: postgres
+  host: localhost
+  port: 5432
+  database: mydatabase
+  username: myuser
+  password: mypassword
+  options:
+    sslmode: disable      # local Docker Postgres has no TLS
+    log_level: warn       # GORM query logging defaults to warn, libraries should be silent
+  pool:
+    max_open: 10
+    max_idle: 5
+    max_lifetime: 30m
+    max_idle_time: 5m
+
+
 server:
   name: access-desk
   mode: debug
