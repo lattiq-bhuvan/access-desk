@@ -17,6 +17,7 @@ import (
 
 	"github.com/lattiq-bhuvan/access-desk/internal/handler"
 	"github.com/lattiq-bhuvan/access-desk/internal/store"
+	_service "github.com/lattiq-bhuvan/access-desk/internal/service"
 )
 
 type Config struct {
@@ -53,11 +54,21 @@ func main() {
 		os.Exit(1)
 	}
 	
-	dh := handler.NewDatasetHandler(st)
-	
+	reqSvc := _service.NewRequestService(st)
+	reqH := handler.NewRequestHandler(reqSvc)
+	dsH := handler.NewDatasetHandler(st)
+
 	router := _gin.Router(&cfg.Server)
 	v1 := router.Group("/v1")
-	v1.GET("/datasets", dh.List)
+	v1.GET("/datasets", dsH.List) // public for now
+
+	auth := v1.Group("", handler.TempAuth()) // M4: swap TempAuth() for the JWT middleware
+	{
+		auth.POST("/requests", reqH.Create)
+		auth.GET("/requests", reqH.List)
+		auth.GET("/requests/:id", reqH.Get)
+		auth.POST("/requests/:id/decision", reqH.Decide)
+	}
 	
 	httpServer := _http.NewServer(&cfg.Server, router)
 	svc.AddServer("http", httpServer, cfg.Server.Address())
