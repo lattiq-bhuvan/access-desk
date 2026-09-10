@@ -8,6 +8,12 @@ tracing:
   otlp_protocol: grpc
   stdout_exporter: true             # keep on until traces show up in OpenObserve
 
+jwt:
+  secret_key: "my-secret-key"
+  access_token_ttl: 15m
+  refresh_token_ttl: 24h
+  issuer: accessdesk
+  audience: ["accessdesk"]
 
 database:
   driver: postgres
@@ -27,7 +33,7 @@ database:
 
 
 server:
-  name: access-desk
+  name: accessdesk
   mode: debug
   host: ""
   port: 8080

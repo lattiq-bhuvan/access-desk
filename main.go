@@ -7,23 +7,27 @@ import (
 	"time"
 
 	govalidator "github.com/go-playground/validator/v10"
-	_http "github.com/lattiq/foundry/service/http"
-	_gin "github.com/lattiq/foundry/service/http/gin"
+	fjwt "github.com/lattiq/foundry/auth/jwt"
 	"github.com/lattiq/foundry/config"
 	"github.com/lattiq/foundry/database/sql"
 	"github.com/lattiq/foundry/o11y/logging"
 	"github.com/lattiq/foundry/service"
+	_http "github.com/lattiq/foundry/service/http"
+	_gin "github.com/lattiq/foundry/service/http/gin"
+	fmw "github.com/lattiq/foundry/service/http/middleware"
 	"github.com/lattiq/foundry/validator"
 
+	"github.com/lattiq-bhuvan/access-desk/internal/auth"
 	"github.com/lattiq-bhuvan/access-desk/internal/handler"
-	"github.com/lattiq-bhuvan/access-desk/internal/store"
 	_service "github.com/lattiq-bhuvan/access-desk/internal/service"
+	"github.com/lattiq-bhuvan/access-desk/internal/store"
 )
 
 type Config struct {
-	Logging logging.Config `json:"logging"`
-	Server  _http.Config   `json:"server"`
-	Database sql.Config `json:"database"`
+	Logging  logging.Config `json:"logging"`
+	Server   _http.Config   `json:"server"`
+	Database sql.Config     `json:"database"`
+	JWT      fjwt.Config    `json:"jwt"`
 }
 
 func main() {
@@ -45,7 +49,7 @@ func main() {
 	}
 
 	cfg.Logging.Configure()
-	serverName := "access-desk"
+	serverName := "accessdesk"
 	svc := service.New(serverName).WithShutdownTimeout(5 * time.Second)
 
 	st, err := store.New(context.Background(), &cfg.Database)
@@ -53,23 +57,45 @@ func main() {
 		slog.Error("failed to init store", "error", err)
 		os.Exit(1)
 	}
-	
+
 	reqSvc := _service.NewRequestService(st)
 	reqH := handler.NewRequestHandler(reqSvc)
+
+	accessTTL, _ := time.ParseDuration(cfg.JWT.AccessTokenTTL)
+	tokenSvc := fjwt.NewTokenService(cfg.JWT)
+
+	authSvc := auth.NewAuthService(st, tokenSvc, accessTTL)
+	authH := handler.NewAuthHandler(authSvc)
+
 	dsH := handler.NewDatasetHandler(st)
 
-	router := _gin.Router(&cfg.Server)
-	v1 := router.Group("/v1")
-	v1.GET("/datasets", dsH.List) // public for now
+	jwtMW := fmw.NewJWTMiddleware(fmw.JWTMiddlewareConfig{
+		TokenService:  tokenSvc,
+		ClaimsFactory: auth.ClaimsFactory,
+	}).Handler()
 
-	auth := v1.Group("", handler.TempAuth()) // M4: swap TempAuth() for the JWT middleware
+	router := _gin.Router(&cfg.Server)
+
+	// public routes
+	authRouter := router.Group("/auth/v1")
 	{
-		auth.POST("/requests", reqH.Create)
-		auth.GET("/requests", reqH.List)
-		auth.GET("/requests/:id", reqH.Get)
-		auth.POST("/requests/:id/decision", reqH.Decide)
+		authRouter.POST("/login", authH.Login)
+		authRouter.POST("/refresh", authH.Refresh)
+		authRouter.POST("/logout", authH.Logout)
 	}
-	
+
+	// protected routes
+	v1 := router.Group("/v1", jwtMW)
+	{
+		v1.GET("/datasets", dsH.List)
+		v1.GET("/users/me", authH.Me)
+		v1.PATCH("/users/me/settings", authH.UpdateSettings)
+		v1.POST("/requests", reqH.Create)
+		v1.GET("/requests", reqH.List)
+		v1.GET("/requests/:id", reqH.Get)
+		v1.POST("/requests/:id/decision", reqH.Decide)
+	}
+
 	httpServer := _http.NewServer(&cfg.Server, router)
 	svc.AddServer("http", httpServer, cfg.Server.Address())
 
