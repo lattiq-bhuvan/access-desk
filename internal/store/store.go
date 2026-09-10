@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/lattiq/foundry/database"
 	"github.com/lattiq/foundry/database/sql"
@@ -31,7 +32,7 @@ func New(ctx context.Context, cfg *sql.Config) (*Store, error) {
 }
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&model.Dataset{}, &model.AccessRequest{}, &model.Decision{})
+	return db.AutoMigrate(&model.Dataset{}, &model.AccessRequest{}, &model.Decision{}, &model.User{})
 }
 
 func seed(db *gorm.DB) error {
@@ -45,6 +46,18 @@ func seed(db *gorm.DB) error {
 		if err := db.Where(model.Dataset{Slug: d.Slug}).
 			Attrs(d).
 			FirstOrCreate(&model.Dataset{}).Error; err != nil {
+			return err
+		}
+	}
+
+	h, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
+	users := []model.User{
+		{Email: "bhuvan@lattiq.com", Name: "Bhuvan", Role: "requester", PasswordHash: string(h)},
+		{Email: "guna@lattiq.com", Name: "Gunasekaran", Role: "approver", PasswordHash: string(h)},
+	}
+	for _, u := range users {
+		if err := db.Where(model.User{Email: u.Email}).Attrs(u).
+			FirstOrCreate(&model.User{}).Error; err != nil {
 			return err
 		}
 	}
