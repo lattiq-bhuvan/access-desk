@@ -1,12 +1,17 @@
 logging:
   level: debug
   format: text
+  report_caller: true
 
 
 tracing:
-  otlp_endpoint: "localhost:4317"   # the collector, NOT OpenObserve
-  otlp_protocol: grpc
-  stdout_exporter: true             # keep on until traces show up in OpenObserve
+  service_name: accessdesk
+  service_version: development
+  environment: development
+  otlp_endpoint: ""
+  sampling_rate: 1.0
+  enabled: true
+  stdout_exporter: true
 
 jwt:
   secret_key: "my-secret-key"
