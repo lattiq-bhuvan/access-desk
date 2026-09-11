@@ -11,6 +11,7 @@ import (
 	"github.com/lattiq/foundry/config"
 	"github.com/lattiq/foundry/database/sql"
 	"github.com/lattiq/foundry/o11y/logging"
+	"github.com/lattiq/foundry/o11y/tracing"
 	"github.com/lattiq/foundry/service"
 	_http "github.com/lattiq/foundry/service/http"
 	_gin "github.com/lattiq/foundry/service/http/gin"
@@ -28,6 +29,7 @@ type Config struct {
 	Server   _http.Config   `json:"server"`
 	Database sql.Config     `json:"database"`
 	JWT      fjwt.Config    `json:"jwt"`
+	Tracing  tracing.Config `json:"tracing"`
 }
 
 func main() {
@@ -51,6 +53,16 @@ func main() {
 	cfg.Logging.Configure()
 	serverName := "accessdesk"
 	svc := service.New(serverName).WithShutdownTimeout(5 * time.Second)
+
+	tracingCleanup, err := cfg.Tracing.SetupTracing(context.Background())
+	if err != nil {
+		slog.Error("failed to setup tracing", "error", err)
+		os.Exit(1)
+	}
+	svc.AddShutdownHook(service.NewFuncHook("tracing-cleanup", func(ctx context.Context) error {
+		tracingCleanup()
+		return nil
+	}))
 
 	st, err := store.New(context.Background(), &cfg.Database)
 	if err != nil {
