@@ -1,0 +1,9 @@
+/* @lattiq/design-system's stylesheet already contains @tailwind base/components/utilities
+   plus the CSS custom properties (--background, --primary, etc.) tailwind.config.js maps
+   into color tokens. Every component in the library, and every page built here, relies on
+   these variables and utility classes existing globally. */
+@import '@lattiq/design-system/styles/globals.css';
+
+#root {
+  min-height: 100svh;
+}
