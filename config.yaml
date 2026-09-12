@@ -46,6 +46,9 @@ server:
   write_timeout: 15s
   idle_timeout: 60s
   cors:
-    allowed_origins: ["*"]
-    allowed_methods: ["GET", "POST", "OPTIONS"]
-    allowed_headers: ["*"]
+    # webtk's fetch calls use credentials: 'include'; browsers reject a
+    # wildcard origin combined with credentialed requests, so this must be
+    # the exact Vite dev origin, not "*".
+    allowed_origins: ["http://localhost:5173"]
+    allowed_methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"]
+    allowed_headers: ["Content-Type", "Authorization"]
