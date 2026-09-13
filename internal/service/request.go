@@ -2,6 +2,7 @@ package service
 
 import (
 	stderrors "errors"
+	"strconv"
 
 	"context"
 
@@ -22,6 +23,18 @@ type Caller struct {
 	Role   string
 }
 
+// id parses the caller's JWT-carried user id (kept as a string in the token
+// to dodge JSON-number precision issues) back into the uint used as the
+// real DB foreign key. It only fails for a hand-crafted/forged token, so a
+// parse failure is treated as an auth error, not a 500.
+func (c Caller) id() (uint, error) {
+	id, err := strconv.ParseUint(c.UserID, 10, 64)
+	if err != nil {
+		return 0, fErr.ErrUnauthorized("invalid caller id")
+	}
+	return uint(id), nil
+}
+
 type RequestService struct {
 	st       *store.Store
 	observer o11y.Observer
@@ -38,13 +51,19 @@ func (s *RequestService) Create(ctx context.Context, c Caller, in dto.CreateRequ
 	ctx, span := s.observer.StartSpan(ctx)
 	defer span.End()
 
-	r := &model.AccessRequest{
-		DatasetID: in.DatasetID,
-		Requester: c.UserID,
-		Reason:    in.Reason,
-		Status:    "PENDING",
+	requesterID, err := c.id()
+	if err != nil {
+		tracing.RecordError(span, err)
+		return nil, err
 	}
-	err := s.st.CreateRequest(ctx, r)
+
+	r := &model.AccessRequest{
+		DatasetID:   in.DatasetID,
+		RequesterID: requesterID,
+		Reason:      in.Reason,
+		Status:      "PENDING",
+	}
+	err = s.st.CreateRequest(ctx, r)
 	switch {
 	case stderrors.Is(err, gorm.ErrDuplicatedKey):
 		{
@@ -62,12 +81,21 @@ func (s *RequestService) Create(ctx context.Context, c Caller, in dto.CreateRequ
 			return nil, err
 		}
 	}
-	return r, nil
+	// Create doesn't preload the Requester association (nothing to preload —
+	// we just wrote the row); re-fetch through GetRequest so the response
+	// still carries a human-readable requester email like every other route.
+	return s.st.GetRequest(ctx, r.ID)
 }
 
 func (s *RequestService) Get(ctx context.Context, c Caller, id uint) (*model.AccessRequest, error) {
 	ctx, span := s.observer.StartSpan(ctx)
 	defer span.End()
+
+	callerID, err := c.id()
+	if err != nil {
+		tracing.RecordError(span, err)
+		return nil, err
+	}
 
 	r, err := s.st.GetRequest(ctx, id)
 	if stderrors.Is(err, gorm.ErrRecordNotFound) {
@@ -78,9 +106,10 @@ func (s *RequestService) Get(ctx context.Context, c Caller, id uint) (*model.Acc
 		tracing.RecordError(span, err)
 		return nil, err
 	}
-	if c.Role != "approver" && r.Requester != c.UserID {
+	if c.Role != "approver" && r.RequesterID != callerID {
+		err := fErr.ErrAccessDenied("not your request")
 		tracing.RecordError(span, err)
-		return nil, fErr.ErrAccessDenied("not your request")
+		return nil, err
 	}
 	return r, nil
 }
@@ -89,9 +118,14 @@ func (s *RequestService) List(ctx context.Context, c Caller, q dto.ListRequestsQ
 	ctx, span := s.observer.StartSpan(ctx)
 	defer span.End()
 
-	onlyRequester := ""
+	var onlyRequester uint
 	if c.Role != "approver" {
-		onlyRequester = c.UserID // requester sees only their own
+		id, err := c.id()
+		if err != nil {
+			tracing.RecordError(span, err)
+			return nil, 0, err
+		}
+		onlyRequester = id // requester sees only their own
 	}
 	return s.st.ListRequests(ctx, onlyRequester, q.Status, q.Page, q.PageSize)
 }
@@ -110,10 +144,16 @@ func (s *RequestService) Decide(ctx context.Context, c Caller, id uint, in dto.D
 		return nil, fErr.ErrAccessDenied("only approvers can decide requests")
 	}
 
+	callerID, err := c.id()
+	if err != nil {
+		tracing.RecordError(span, err)
+		return nil, err
+	}
+
 	newStatus := map[string]string{"APPROVE": "APPROVED", "REJECT": "REJECTED"}[in.Decision]
 
 	check := func(cur *model.AccessRequest) error {
-		if cur.Requester == c.UserID {
+		if cur.RequesterID == callerID {
 			return fErr.ErrAccessDenied("cannot decide your own request")
 		}
 		if cur.Status != "PENDING" {
@@ -123,8 +163,8 @@ func (s *RequestService) Decide(ctx context.Context, c Caller, id uint, in dto.D
 		return nil
 	}
 
-	dec := &model.Decision{Decider: c.UserID, Decision: in.Decision, Note: in.Note}
-	err := s.st.DecideRequest(ctx, id, check, newStatus, dec)
+	dec := &model.Decision{DeciderID: callerID, Decision: in.Decision, Note: in.Note}
+	err = s.st.DecideRequest(ctx, id, check, newStatus, dec)
 	if stderrors.Is(err, gorm.ErrRecordNotFound) {
 		tracing.RecordError(span, err)
 		return nil, fErr.ErrResourceNotFound("request not found")

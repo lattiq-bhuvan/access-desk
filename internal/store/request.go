@@ -16,19 +16,20 @@ func (s *Store) CreateRequest(ctx context.Context, r *model.AccessRequest) error
 
 func (s *Store) GetRequest(ctx context.Context, id uint) (*model.AccessRequest, error) {
 	var r model.AccessRequest
-	err := s.db.WithContext(ctx).First(&r, id).Error
+	err := s.db.WithContext(ctx).Preload("Requester").First(&r, id).Error
 	if err != nil {
 		return nil, err // caller checks gorm.ErrRecordNotFound
 	}
+	r.RequesterEmail = r.Requester.Email
 	return &r, nil
 }
 
-// ListRequests: onlyRequester != "" scopes to that user. Returns rows + total count.
-func (s *Store) ListRequests(ctx context.Context, onlyRequester, status string, page, pageSize int) ([]model.AccessRequest, int64, error) {
+// ListRequests: onlyRequester != 0 scopes to that user's id. Returns rows + total count.
+func (s *Store) ListRequests(ctx context.Context, onlyRequester uint, status string, page, pageSize int) ([]model.AccessRequest, int64, error) {
 	q := s.db.WithContext(ctx).Model(&model.AccessRequest{})
-	// filter by requesters
-	if onlyRequester != "" {
-		q = q.Where("requester = ?", onlyRequester)
+	// filter by requester
+	if onlyRequester != 0 {
+		q = q.Where("requester_id = ?", onlyRequester)
 	}
 
 	// filter by status(pending, approved, rejected)
@@ -42,9 +43,12 @@ func (s *Store) ListRequests(ctx context.Context, onlyRequester, status string, 
 	}
 
 	var rows []model.AccessRequest
-	err := q.Order("created_at desc").
+	err := q.Preload("Requester").Order("created_at desc").
 		Limit(pageSize).Offset((page - 1) * pageSize).
 		Find(&rows).Error
+	for i := range rows {
+		rows[i].RequesterEmail = rows[i].Requester.Email
+	}
 	return rows, total, err
 }
 
